@@ -1,223 +1,129 @@
+// MIDI Control
 const easymidi = require('easymidi');
-const applescript = require('applescript');
+// VLC Control
+const vlcPlayer = require('vlc-simple-player');
+const vlcController = require("vlc-client");
 
-var controller = `Arturia BeatStep`;
+const midiControllerName = `Arturia BeatStep`;
 
-var inputs = easymidi.getInputs();
-var outputs = easymidi.getOutputs();
+const vlcFilePath = `/Users/juliancrouch/Documents/CUTS.m3u`;
 
-function getAppleScriptForKey(key) {
-  // Assumes hotkeys with COMMAND + key combo
-  return `
-  tell application "OBS"
-    activate
-    tell application "System Events"
-      key code ${key} using {command down}
-    end tell
-  end tell
-  `
-}
-
-function generateVLCAppleScript(secs) {
-  const fastForward = `key code 124 using {command down, option down} \n delay ${secs}`;
-  const nextTrack = `key code 124 using command down \n  delay ${secs}`;
-  const pauseTrack = `key code 35 using command down \n delay ${secs}`;
-
-  let script =
-    `tell application "VLC"
-    activate
-    tell application "System Events"
-  `;
-
-  let scriptEnd = `end tell \nend tell`;
-
-  script = script.concat(`\n`, nextTrack);
-
-  for (let i = 0; i < 3; i++) {
-    script = script.concat(`\n`, fastForward);
-  }
-
-  script = script.concat(`\n`, nextTrack);
-  script = script.concat(`\n`, nextTrack);
-
-  for (let i = 0; i < 5; i++) {
-    script = script.concat(`\n`, fastForward);
-  }
-  for (let i = 0; i < 3; i++) {
-    script = script.concat(`\n`, fastForward);
-  }
-
-  script = script.concat(`\n`, nextTrack);
-  script = script.concat(`\n`, nextTrack);
-  script = script.concat(`\n`, nextTrack);
-
-  for (let i = 0; i < 4; i++) {
-    script = script.concat(`\n`, fastForward);
-  }
-
-  script = script.concat(`\n`, nextTrack);
-  script = script.concat(`\n`, nextTrack);
-
-  script = script.concat(`\n`, pauseTrack);
-  script = script.concat(`\n`, scriptEnd);
-
-  return script;
-}
+const vlcOptions = {
+    arguments: [
+        `--loop`,
+        `--no-video-title`,
+        `--random`,
+        `--no-audio`,
+        `--width=1920`,
+        `--height=1080`,
+        `--aspect-ratio=16x9`,
+    ],
+    password: `vlc`,
+    port: 8080
+};
 
 function sleep(seconds ) {
   return new Promise(resolve => setTimeout(resolve, seconds * 1000));
 }
 
-console.log('Inputs found:', inputs);
-console.log('Outputs found:', outputs);
+function setupMIDI(controllerName) {
+    var inputs = easymidi.getInputs();
+    var outputs = easymidi.getOutputs();
+    console.log('Inputs found:', inputs);
+    console.log('Outputs found:', outputs);
 
-console.log('Looking for proper input/output...');
-for (i = 0, input = null; input = inputs[i++];) {
-    if (~input.indexOf(controller)) {
-        console.log(`Found matching input "${input}" at index ${i - 1}.`);
-        global.input = new easymidi.Input(input);
-        break;
+    console.log('Looking for proper input/output...');
+    for (i = 0, input = null; input = inputs[i++];) {
+        if (~input.indexOf(controllerName)) {
+            console.log(`Found matching input "${input}" at index ${i - 1}.`);
+            global.input = new easymidi.Input(input);
+            break;
+        }
+    }
+
+    if (!global.input) {
+        console.error(`No controller matching "${controllerName}" was found. Quitting...`);
+        process.exit();
+        return;
     }
 }
 
-if (!global.input) {
-    console.error(`No controller matching "${controller}" was found. Quitting...`);
-    process.exit();
-    return;
+async function initializeVLC(filepath, options) {
+    new vlcPlayer(vlcFilePath, vlcOptions);
+
+    const controller = new vlcController.Client({
+        ip: "localhost",
+        port: 8080,
+        password: `vlc`
+    });
+
+    // For whatever reason a sleep seems necessary to get this promise to resolve properly...
+    await sleep(1);
+    await pausePlayback(controller);
+    return controller;
 }
 
-/*
-All Possible MIDI inputs:
-=================================================================================
-input.on('noteon', args => console.log('noteon', args));
-input.on('poly aftertouch', args => console.log('poly aftertouch', args));
-input.on('cc', args => console.log('cc', args));
-input.on('program', args => console.log('program', args));
-input.on('channel aftertouch', args => console.log('channel aftertouch', args));
-input.on('pitch', args => console.log('pitch', args));
-input.on('position', args => console.log('position', args));
-input.on('mtc', args => console.log('mtc', args));
-input.on('select', args => console.log('select', args));
-input.on('sysex', args => console.log('sysex', args));
-*/
-
-// Looking for normal keypresses (Channel & Key, Velocity is ignored.)
-input.on('noteon', (args) => {
-  console.log('noteon', args);
-
-// AppleScript key codes can be found here: https://eastmanreference.com/complete-list-of-applescript-key-codes
-
-  if (args.channel === 0) {
-    switch (args.note) {
-
-      // ST LOGO :: CMD + 9 :: MIDI Key 36
-      case 36: {
-        applescript.execString(getAppleScriptForKey(25), (error, results) => {
-          if (error) {
-            console.error(error.message);
-          }
-        });
-        break;
-      }
-
-      // 3D DECKS :: CMD + 3 :: MIDI Key 42
-      case 42: {
-        applescript.execString(getAppleScriptForKey(21), (error, results) => {
-          if (error) {
-            console.error(error.message);
-          }
-        });
-        break;
-      }
-
-      // RANDOM CAMS :: CMD + 1 :: MIDI Key 43
-      case 43: {
-        applescript.execString(getAppleScriptForKey(18), (error, results) => {
-          if (error) {
-            console.error(error.message);
-          }
-        });
-        break;
-      }
-
-      // 3D Heart :: CMD + 0 :: MIDI Key 44
-      case 44: {
-        applescript.execString(getAppleScriptForKey(29), (error, results) => {
-          if (error) {
-            console.error(error.message);
-          }
-        });
-        break;
-      }
-
-      // 3D GOPRO :: CMD + 4 :: MIDI Key 50
-      case 50: {
-        applescript.execString(getAppleScriptForKey(20), (error, results) => {
-          if (error) {
-            console.error(error.message);
-          }
-        });
-        break;
-      }
-
-      // NO CAMS :: CMD + 2 :: MIDI Key 51
-      case 51: {
-        applescript.execString(getAppleScriptForKey(19), (error, results) => {
-          if (error) {
-            console.error(error.message);
-          }
-        });
-        break;
-      }
-
-      case 39: {
-        applescript.execString(getAppleScriptForKey(28), (error, results) => {
-          if (error) {
-            console.error(error.message);
-          }
-        });
-        break;
-      }
-
-      case 40: {
-        applescript.execString(getAppleScriptForKey(26), (error, results) => {
-          if (error) {
-            console.error(error.message);
-          }
-        });
-        break;
-      }
-
-      case 47: {
-        applescript.execString(generateVLCAppleScript(0.5), (error, results) => {
-          if (error) {
-            console.error(error.message);
-          }
-        });
-        break;
-      }
-
-      case 48: {
-        applescript.execString(generateVLCAppleScript(1), (error, results) => {
-          if (error) {
-            console.error(error.message);
-          }
-        });
-        break;
-      }
-
-      // case 46: {
-      //   applescript.execString(generateVLCAppleScript(.1), (error, results) => {
-      //     if (error) {
-      //       console.error(error.message);
-      //     }
-      //   });
-      //   break;
-      // }
-
-      default:
-        console.log(`Error: Channel ${args.channel} & Key ${args.note} not mapped.`);
-        break;
+async function pausePlayback(controller) {
+    while (await controller.isPlaying()) {
+        console.log(`Attempting pause.`);
+        await controller.togglePlay();
     }
-  }
-});
+    console.log(`Paused.`);
+}
+
+async function nextTrack(connection, rate) {
+    await sleep(rate);
+    console.log(`Slept for ${rate} seconds`);
+    await connection.next();
+    console.log(`skipped to next track`);
+}
+
+
+async function skipForward(connection, seconds, rate) {
+    await sleep(rate);
+    console.log(`Slept for ${rate} seconds`);
+    await connection.jumpForward(seconds);
+    console.log(`skipped forward ${seconds} seconds`);
+}
+
+async function tester(midiInput, controller) {
+    midiInput.on('noteon', (args) => {
+        console.log('noteon', args);
+        if (args.note === 43) {
+            doStuff(controller);
+        }
+    });
+}
+
+async function doStuff(controller) {
+    console.log(`starting chop loop`);
+    for (let i = 0; i < 2; i++) {
+        await nextTrack(controller, 2);
+        for (let j = 0; j < 2; j++) {
+            await skipForward(controller, 10, 2);
+        }
+    }
+    console.log(`chop loop done.`);
+    await pausePlayback(controller);
+}
+
+(async () => {
+
+    setupMIDI(midiControllerName);
+
+    const controller = await initializeVLC(vlcFilePath, vlcOptions);
+    // await doStuff(controller);
+    // await sleep(1);
+    // await pausePlayback(controller);
+
+    await tester(input, controller);
+
+    // for (let i = 0; i < 1000; i++) {
+    //     if (keyChecker(input, 43)) {
+    //         console.log(`success`);
+    //     } else {
+    //         console.log(`nope`);
+    //     }
+    //     sleep(0.25);
+    // }
+})();
