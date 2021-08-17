@@ -3,10 +3,15 @@ const easymidi = require('easymidi');
 // VLC Control
 const vlcPlayer = require('vlc-simple-player');
 const vlcController = require("vlc-client");
+// OBS Control
+const OBSWebSocket = require('obs-websocket-js');
+// Keymap & Settings Control
+const fileSync = require(`fs`);
 
 const midiControllerName = `Arturia BeatStep`;
-
 const vlcFilePath = `/Users/juliancrouch/Documents/CUTS.m3u`;
+const OBS_CONTROLLER = new OBSWebSocket();
+let VLC_CONTROLLER;
 
 const vlcOptions = {
     arguments: [
@@ -21,6 +26,50 @@ const vlcOptions = {
     password: `vlc`,
     port: 8080
 };
+
+let vlcLoopControl = {
+    sleepDuration: 0,
+    fastForwardSeconds: 0,
+    nextTrackLoopCounter: 0,
+    fastForwardLoopCounter: 0
+}
+
+// Unused now, but will build out a "vlc kill switch" in the future
+async function killVlcLoops() {
+    vlcLoopControl.sleepDuration = 0;
+    vlcLoopControl.fastForwardSeconds = 0;
+    vlcLoopControl.nextTrackLoopCounter = 0;
+    vlcLoopControl.fastForwardLoopCounter = 0;
+    await pauseVlcPlayback();
+}
+
+const keyMap = JSON.parse(fileSync(`midi_key_map.json`));
+
+const obsOptions = {
+    address: 'localhost:4444',
+    password: 'shytiegr'
+};
+
+
+
+async function establishObsConnection() {
+    // const connection = await OBS.connect(obsOptions);
+    await OBS_CONTROLLER.connect(obsOptions);
+    console.log(`Success! We're connected & authenticated.`);
+}
+
+async function executeMidiKeyTrigger(hotkeyData) {
+    // let obsHotkey = `OBS_KEY_1`;
+    await executeObsHotkey(hotkeyData.key, hotkeyData.keyModifiers);
+    console.log(`OBS Hotkey using ${hotkeyData.key} successfully sent`);
+    if (VLC_CONTROLLER && hotkeyData.vlc) {
+        vlcLoopControl.sleepDuration = hotkeyData.vlc.sleepDuration;
+        vlcLoopControl.fastForwardSeconds = hotkeyData.vlc.fastForwardSeconds;
+        vlcLoopControl.nextTrackLoopCounter = hotkeyData.vlc.nextTrackLoopCounter;
+        vlcLoopControl.fastForwardLoopCounter = hotkeyData.vlc.fastForwardLoopCounter;
+        await vlcVideoChop();
+    }
+}
 
 function sleep(seconds ) {
   return new Promise(resolve => setTimeout(resolve, seconds * 1000));
@@ -49,81 +98,89 @@ function setupMIDI(controllerName) {
 }
 
 async function initializeVLC(filepath, options) {
-    new vlcPlayer(vlcFilePath, vlcOptions);
+    new vlcPlayer(filepath, options);
 
-    const controller = new vlcController.Client({
+    const controller = await new vlcController.Client({
         ip: "localhost",
         port: 8080,
         password: `vlc`
     });
 
-    // For whatever reason a sleep seems necessary to get this promise to resolve properly...
-    await sleep(1);
-    await pausePlayback(controller);
+    // await sleep(1;)
+    await pauseVlcPlayback(controller);
     return controller;
 }
 
-async function pausePlayback(controller) {
-    while (await controller.isPlaying()) {
+async function pauseVlcPlayback() {
+    while (await VLC_CONTROLLER.isPlaying()) {
         console.log(`Attempting pause.`);
-        await controller.togglePlay();
+        await VLC_CONTROLLER.togglePlay();
     }
     console.log(`Paused.`);
 }
 
-async function nextTrack(connection, rate) {
-    await sleep(rate);
-    console.log(`Slept for ${rate} seconds`);
-    await connection.next();
+async function nextVlcTrack(sleepDuration) {
+    await sleep(sleepDuration);
+    console.log(`Slept for ${sleepDuration} seconds`);
+    await VLC_CONTROLLER.next();
     console.log(`skipped to next track`);
 }
 
 
-async function skipForward(connection, seconds, rate) {
-    await sleep(rate);
-    console.log(`Slept for ${rate} seconds`);
-    await connection.jumpForward(seconds);
-    console.log(`skipped forward ${seconds} seconds`);
+async function fastForwardVlcTrack(fastForwardSeconds, sleepDuration) {
+    await sleep(sleepDuration);
+    console.log(`Slept for ${sleepDuration} seconds`);
+    await VLC_CONTROLLER.jumpForward(fastForwardSeconds);
+    console.log(`skipped forward ${fastForwardSeconds} seconds`);
 }
 
-async function tester(midiInput, controller) {
-    midiInput.on('noteon', (args) => {
-        console.log('noteon', args);
-        if (args.note === 43) {
-            doStuff(controller);
+
+async function vlcVideoChop() {
+    console.log(`starting chop loop`);
+    for (let i = 0; i < vlcLoopControl.nextTrackLoopCounter; i++) {
+        await nextVlcTrack( vlcLoopControl.sleepDuration);
+        for (let j = 0; j < vlcLoopControl.fastForwardLoopCounter; j++) {
+            await fastForwardVlcTrack( vlcLoopControl.fastForwardSeconds, vlcLoopControl.sleepDuration);
+        }
+    }
+    await pauseVlcPlayback();
+    console.log(`chop loop done.`);
+    await executeObsHotkey(keyMap.defaultScene);
+}
+
+function registerObsListeners() {
+    OBS_CONTROLLER.on('SwitchScenes', data => {
+        console.log(`New Active Scene: ${data.sceneName}`);
+    });
+    OBS_CONTROLLER.on('error', err => {
+        console.error('socket error:', err);
+    });
+}
+async function executeObsHotkey(key, command = false, control = false) {
+    return await OBS_CONTROLLER.send(`TriggerHotkeyBySequence`, {
+        keyId: key,
+        keyModifiers: {
+            command: command,
+            control: control
         }
     });
 }
 
-async function doStuff(controller) {
-    console.log(`starting chop loop`);
-    for (let i = 0; i < 2; i++) {
-        await nextTrack(controller, 2);
-        for (let j = 0; j < 2; j++) {
-            await skipForward(controller, 10, 2);
-        }
-    }
-    console.log(`chop loop done.`);
-    await pausePlayback(controller);
-}
 
 (async () => {
-
     setupMIDI(midiControllerName);
+    VLC_CONTROLLER = await initializeVLC(vlcFilePath, vlcOptions);
+    await establishObsConnection();
+    registerObsListeners();
 
-    const controller = await initializeVLC(vlcFilePath, vlcOptions);
-    // await doStuff(controller);
-    // await sleep(1);
-    // await pausePlayback(controller);
 
-    await tester(input, controller);
-
-    // for (let i = 0; i < 1000; i++) {
-    //     if (keyChecker(input, 43)) {
-    //         console.log(`success`);
-    //     } else {
-    //         console.log(`nope`);
-    //     }
-    //     sleep(0.25);
-    // }
+    input.on('noteon', (args) => {
+        console.log('noteon', args);
+        let midiString = `c` + args.channel + `n` + args.note;
+        if (keyMap[midiString]) {
+            executeMidiKeyTrigger(keyMap[midiString]);
+        } else {
+            console.log(`No midi trigger set for channel ${args.channel} and note ${args.note}`);
+        }
+    });
 })();
