@@ -6,7 +6,7 @@ const vlcController = require("vlc-client");
 // OBS Control
 const OBSWebSocket = require('obs-websocket-js');
 // Keymap & Settings Control
-const fileSync = require(`fs`);
+const { readFileSync } = require(`fs`);
 
 const midiControllerName = `Arturia BeatStep`;
 const vlcFilePath = `/Users/juliancrouch/Documents/CUTS.m3u`;
@@ -43,7 +43,7 @@ async function killVlcLoops() {
     await pauseVlcPlayback();
 }
 
-const keyMap = JSON.parse(fileSync(`midi_key_map.json`));
+const keyMap = JSON.parse(readFileSync(`midi_key_map.json`));
 
 const obsOptions = {
     address: 'localhost:4444',
@@ -106,8 +106,8 @@ async function initializeVLC(filepath, options) {
         password: `vlc`
     });
 
-    // await sleep(1;)
-    await pauseVlcPlayback(controller);
+    await sleep(2);
+    await controller.pause();
     return controller;
 }
 
@@ -126,6 +126,14 @@ async function nextVlcTrack(sleepDuration) {
     console.log(`skipped to next track`);
 }
 
+async function randomVlcSkipTracks() {
+    for (let i = 0; i < getRandomInt(1, 5); i++) {
+        await VLC_CONTROLLER.next();
+        sleep(0.2);
+    }
+    await VLC_CONTROLLER.pause();
+}
+
 
 async function fastForwardVlcTrack(fastForwardSeconds, sleepDuration) {
     await sleep(sleepDuration);
@@ -136,6 +144,8 @@ async function fastForwardVlcTrack(fastForwardSeconds, sleepDuration) {
 
 
 async function vlcVideoChop() {
+    console.log(`Priming new starting point`);
+    // await randomVlcSkipTracks();
     console.log(`starting chop loop`);
     for (let i = 0; i < vlcLoopControl.nextTrackLoopCounter; i++) {
         await nextVlcTrack( vlcLoopControl.sleepDuration);
@@ -143,9 +153,10 @@ async function vlcVideoChop() {
             await fastForwardVlcTrack( vlcLoopControl.fastForwardSeconds, vlcLoopControl.sleepDuration);
         }
     }
-    await pauseVlcPlayback();
+    // await pauseVlcPlayback();
+    await VLC_CONTROLLER.pause();
     console.log(`chop loop done.`);
-    await executeObsHotkey(keyMap.defaultScene);
+    await executeMidiKeyTrigger(keyMap.defaultScene);
 }
 
 function registerObsListeners() {
@@ -156,27 +167,30 @@ function registerObsListeners() {
         console.error('socket error:', err);
     });
 }
-async function executeObsHotkey(key, command = false, control = false) {
+async function executeObsHotkey(key, keyModifiers) {
     return await OBS_CONTROLLER.send(`TriggerHotkeyBySequence`, {
         keyId: key,
-        keyModifiers: {
-            command: command,
-            control: control
-        }
+        keyModifiers: keyModifiers
     });
 }
 
+function getRandomInt(min, max) {
+    min = Math.ceil(min);
+    max = Math.floor(max);
+    return Math.floor(Math.random() * (max - min + 1) + min);
+}
 
 (async () => {
     setupMIDI(midiControllerName);
     VLC_CONTROLLER = await initializeVLC(vlcFilePath, vlcOptions);
+    await randomVlcSkipTracks();
     await establishObsConnection();
     registerObsListeners();
 
 
     input.on('noteon', (args) => {
         console.log('noteon', args);
-        let midiString = `c` + args.channel + `n` + args.note;
+        let midiString = `c` + (args.channel + 1) + `n` + args.note;
         if (keyMap[midiString]) {
             executeMidiKeyTrigger(keyMap[midiString]);
         } else {

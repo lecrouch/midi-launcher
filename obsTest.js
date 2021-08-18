@@ -20,7 +20,7 @@ async function executeObsHotkey(connection, key) {
         keyId: key,
         keyModifiers: {
             command: true,
-            control: true
+            control: false
         }
     });
 }
