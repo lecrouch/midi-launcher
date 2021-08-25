@@ -48,7 +48,7 @@
     },
     "vlc": {
       "sleepDuration": 1,
-      "fastForwardSeconds": 10,
+      "fastForwardSeconds": 15,
       "nextTrackLoopCounter": 5,
       "fastForwardLoopCounter": 3
     }
@@ -66,8 +66,8 @@
       "command": true
     },
     "vlc": {
-      "sleepDuration": 1,
-      "fastForwardSeconds": 10,
+      "sleepDuration": 2,
+      "fastForwardSeconds": 7,
       "nextTrackLoopCounter": 5,
       "fastForwardLoopCounter": 3
     }
@@ -123,5 +123,53 @@
       "control": false,
       "command": true
     }
+  },
+  "c1n37": {
+    "details": {
+      "sceneName": "DOGE CAM",
+      "sequencerNumber": 10
+    },
+    "key": "OBS_KEY_5",
+    "keyModifiers": {
+      "shift": false,
+      "alt": false,
+      "control": false,
+      "command": true
+    }
+  },
+  "c1n45": {
+    "details": {
+      "sceneName": "HOOMAN CAM",
+      "sequencerNumber": 2
+    },
+    "key": "OBS_KEY_6",
+    "keyModifiers": {
+      "shift": false,
+      "alt": false,
+      "control": false,
+      "command": true
+    }
+  },
+  "c1n99": {
+    "details": {
+      "sceneName": "",
+      "sequencerNumber": 2
+    },
+    "requiresLoop": true
+  },
+  "c1c17": {
+    "operation": "BPM"
+  },
+  "c1c91": {
+    "operation": "fastForwardSeconds"
+  },
+  "c1c79": {
+    "operation": "nextTrackLoopCounter"
+  },
+  "c1c72": {
+    "operation": "fastForwardLoopCounter"
+  },
+  "c1c75": {
+    "operation": "vlcPlaylistSelect"
   }
 }
