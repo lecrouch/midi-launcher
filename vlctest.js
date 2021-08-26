@@ -102,20 +102,22 @@ async function pauseVlcPlayback(controller) {
     // console.log(`played?`);
     // await controller.pause();
     // console.log(`paused again?`);
-    await sleep(10);
+    await sleep(2);
     // await controller.emptyPlaylist();
     let playlist = await controller.getPlaylist();
-    let playlistLength = playlist.length;
     console.log(`playlist 1 received`);
-
+    console.log(`old playlist length = ${playlist.length}`);
     // await sleep(10);
     await controller.playFile(VLC_PLAYLISTS[1], {noaudio: true});
     let secondPlaylist = await controller.getPlaylist();
-    let secondPlaylistLength = secondPlaylist.length;
     console.log(`playlist 2 received`);
+    console.log(`new playlist length = ${secondPlaylist.length}`);
     await pauseVlcPlayback(controller);
-    for (let i = 0; i < playlistLength; i++) {
+    for (let i = 0; i < playlist.length; i++) {
         await controller.removeFromPlaylist(i);
     }
+    let modifiedPlaylist = await controller.getPlaylist();
+    console.log(`playlist 3 received`);
+    console.log(`modified playlist length = ${modifiedPlaylist.length}`);
     await sleep(3);
 })();

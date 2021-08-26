@@ -44,7 +44,8 @@ const LOOPING_SCENES = [
     `DUB HORIZ LUT STRIPE -- GOPRO`,
     `DUB VERT LUT STRIPE -- GOPRO`,
     `LUT RESIZE SPIRAL -- GOPRO`,
-    `LUTS -- GOPRO`
+    `LUTS -- GOPRO`,
+    `STROBE -- GOPRO`
 ];
 
 let vlcLoopControl = {
@@ -151,11 +152,19 @@ async function executeMidiRotaryController(hotkeyData, midiString, value) {
             }
 
             let oldPlaylist = await VLC_CONTROLLER.getPlaylist();
+            console.log(oldPlaylist.length);
             await VLC_CONTROLLER.playFile(VLC_PLAYLISTS[VLC_PLAYLIST_INDEX], {noaudio: true});
             await pauseVlcPlayback();
-            for (let i = 0; i < oldPlaylist; i++) {
+            let newplaylist = await VLC_CONTROLLER.getPlaylist();
+            console.log(newplaylist.length);
+            for (let i = 0; i < oldPlaylist.length; i++) {
                 await VLC_CONTROLLER.removeFromPlaylist(i);
+                await sleep(1);
             }
+            // await sleep(1);
+            let newnewplaylist = await VLC_CONTROLLER.getPlaylist();
+            console.log(newnewplaylist.length);
+            console.log(`Playlist: ${VLC_PLAYLISTS[VLC_PLAYLIST_INDEX]} loaded!`);
             break;
         }
 
@@ -725,6 +734,22 @@ async function doubleLutVertStripe(scene) {
     }
 }
 
+async function strobe(scene) {
+    // const itemNames = getRelevantSceneItems(scene.sources, `strobe`)
+    let toggleState = true;
+    for (let i = 0; i < 400; i++) {
+        await OBS_CONTROLLER.send(`SetSceneItemProperties`, {
+            'scene-name': scene.name,
+            item: {
+                name: `1080p strobe`
+            },
+            visible: toggleState
+        });
+        toggleState = !toggleState;
+        await sleep(0.01);
+    }
+}
+
 async function executeLoopingScene(scene) {
     MASTER_LOOP = true
     switch (scene.sceneName) {
@@ -750,6 +775,10 @@ async function executeLoopingScene(scene) {
         }
         case `LUTS -- GOPRO`: {
             await lutCycle(scene);
+            break;
+        }
+        case `STROBE -- GOPRO`: {
+            await strobe(scene);
             break;
         }
         default: {
